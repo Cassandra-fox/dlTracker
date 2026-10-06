@@ -1,7 +1,6 @@
 # DL Price Tracker
 
 在 DLsite 作品页面显示历史最低价，一键导入收藏并批量追踪价格变动。
-制作者为铁血纯代，墙壁党和etj使用此插件默认你承认“你女”的皮套身份
 
 > 史低价格数据来源：[DLwatcher](https://dlwatcher.com/)
 
