@@ -30,10 +30,11 @@ export async function updatePrice(code: string, token: string | null): Promise<O
 
 export async function getOrFetchPrice(input: ProductInput): Promise<PriceRecord | null> {
   const { record, tracking } = await observeProduct(input);
-  if (tracking || isCacheFresh(record)) return record;
-  // Short retry cooldown for automatic browsing only; never marks failures as fresh successes.
-  if (record.lastAttemptResult === 'failed' && Date.now() - Date.parse(record.lastAttemptFinishedAt ?? '') < 30_000) return record;
-  await updatePrice(input.rjCode, null);
+  const retryMissingPrice = !hasPrice(record) && record.lastAttemptResult === 'failed';
+  // A fresh page visit may retry a failed initial lookup, including tracked items.
+  // Saved tracked prices still require an explicit management-page update.
+  if ((tracking || isCacheFresh(record)) && !retryMissingPrice) return record;
+  await updatePrice(input.rjCode, tracking?.trackingToken ?? null);
   return await getPriceRecord(input.rjCode) ?? null;
 }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { emptyPrice, isCacheFresh, mergePriceResult, priceStatus } from '@/shared/price';
+import { emptyPrice, isCacheFresh, mergePriceResult, priceFailureMessage, priceStatus } from '@/shared/price';
 import { recordsToCsv } from '@/background/csv';
 import { parsePriceResponse, retryAfterMilliseconds } from '@/services/dlwatcher';
 import { toCsvCell } from '@/shared/utils';
@@ -22,6 +22,19 @@ test('failed attempts do not extend successful cache TTL', () => {
   const now = Date.parse('2026-01-03T00:00:00Z');
   const record = { ...emptyPrice('RJ123456', '2026-01-01T00:00:00Z'), lowestPrice: 100, lastSuccessAt: '2026-01-01T00:00:00Z' };
   assert.equal(isCacheFresh(mergePriceResult(record, { status: 'failed', error: 'http_500' }, new Date(now).toISOString()), now), false);
+});
+
+test('page failures explain the cause and allow refresh without management or tracking', () => {
+  for (const [error, cause] of [
+    ['http_404:上游请求失败', 'HTTP 404'], ['http_503:上游请求失败', 'HTTP 503'],
+    ['network:网络请求失败', '网络错误'], ['timeout:请求超时', '请求超时'],
+    ['invalid_response:无法解析 JSON', '价格响应格式异常'], ['http_429:上游请求失败', '请求受限'],
+  ]) {
+    const message = priceFailureMessage(error);
+    assert.ok(message.includes(cause));
+    assert.ok(message.includes('刷新页面重试'));
+    assert.ok(!message.includes('管理页'));
+  }
 });
 test('remote schema separates valid empty price, invalid responses and zero price', () => {
   assert.equal(parsePriceResponse({ lowestPrice: null }).status, 'no_data');

@@ -1,5 +1,4 @@
 import { appendTrackedProducts, cleanExpiredCache, listTrackedRecords, removeTrackedProducts, saveTrackingNote, trackingCount } from '@/db/repository';
-import { parseDlsiteProductUrl } from '@/shared/product';
 import { parseRequest } from '@/shared/validation';
 import type { RuntimeRequest } from '@/shared/types';
 import { getOperation, getOrFetchPrice, startOperation, startUpdate } from './operations';
@@ -61,9 +60,6 @@ chrome.runtime.onMessage.addListener((raw: unknown, sender, sendResponse) => {
   return true;
 });
 
-chrome.tabs.onUpdated.addListener((_tabId, changeInfo, tab) => {
-  if (changeInfo.status !== 'complete' || !tab.url) return;
-  const product = parseDlsiteProductUrl(tab.url);
-  if (product) void getOrFetchPrice(product).catch((error: unknown) => console.error('[DLTracker] 自动查价失败', error));
-});
+// Content scripts initiate page lookups. A second tabs.onUpdated lookup could
+// retry immediately after a fast failure, duplicating one page visit's request.
 void cleanExpiredCache().catch((error: unknown) => console.error('[DLTracker] 缓存清理失败', error));

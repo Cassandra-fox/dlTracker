@@ -42,7 +42,9 @@ async function fetchPrice(code: string): Promise<FetchPriceResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${DLWATCHER_BASE}/${code}.json`, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    // IndexedDB owns our cache policy; do not replay a browser-cached HTTP error
+    // when the user refreshes to retry. Upstream/CDN caching remains server-owned.
+    const response = await fetch(`${DLWATCHER_BASE}/${code}.json`, { signal: controller.signal, cache: 'no-store', headers: { Accept: 'application/json' } });
     if (!response.ok) return {
       status: 'failed', error: `http_${response.status}:上游请求失败`,
       ...(response.status === 429 ? { retryAfterMs: retryAfterMilliseconds(response.headers.get('Retry-After')) } : {}),

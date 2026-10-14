@@ -2,7 +2,7 @@ import './style.css';
 import { MAX_IMPORT_PRODUCTS, UI_CLASSNAME } from '@/shared/constants';
 import { parseDlsiteProductUrl, type ProductInput } from '@/shared/product';
 import type { PriceRecord } from '@/shared/types';
-import { hasPrice } from '@/shared/price';
+import { hasPrice, priceFailureMessage } from '@/shared/price';
 import { errorMessage, operationSummary, sendRuntimeMessage, waitForOperation } from '@/shared/runtime';
 import { nowIso, toYen } from '@/shared/utils';
 import { parseWishlistProducts } from './favorites';
@@ -22,7 +22,7 @@ function renderCard(host: Element, record?: PriceRecord | null, message?: string
   const chip = document.createElement('span');
   chip.className = 'dltracker-chip';
   if (message || !record || !hasPrice(record)) {
-    chip.textContent = message || (record?.lastAttemptResult === 'failed' ? '史低获取失败，可在管理页重试' : record?.lastAttemptResult === 'no_data' ? '暂无有效史低数据' : '尚未获取史低，请在管理页更新');
+    chip.textContent = message || (record?.lastAttemptResult === 'failed' ? priceFailureMessage(record.lastErrorCode) : record?.lastAttemptResult === 'no_data' ? '暂无有效史低数据' : '尚未获取史低，请在管理页更新');
     if (message !== '史低获取中...') chip.classList.add('dltracker-error');
   } else {
     const discount = typeof record.discountRate === 'number' ? ` (${record.discountRate.toFixed(1)}%OFF)` : '';

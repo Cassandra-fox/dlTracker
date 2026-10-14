@@ -43,10 +43,10 @@ test('batch settles successes, no data and failures independently, with early pe
   assert.equal((await listTrackedRecords()).length, 3);
   assert.equal(getOperation('missing-operation'), null);
 });
-test('tracked browsing never fetches; cache browsing coalesces and retains each observation', async () => {
+test('browsing preserves saved tracked prices and valid no-data cache; cache requests coalesce', async () => {
   const before = calls.length;
   await getOrFetchPrice({ rjCode: 'RJ200001', currentPrice: 120 });
-  await getOrFetchPrice({ rjCode: 'RJ200002' });
+  await getOrFetchPrice({ rjCode: 'RJ200003' });
   assert.equal(calls.length, before);
   await Promise.all([
     getOrFetchPrice({ rjCode: 'VJ200001', currentPrice: 150, observedAt: '2026-01-01T00:00:00.000Z' }),
@@ -56,6 +56,39 @@ test('tracked browsing never fetches; cache browsing coalesces and retains each 
   assert.equal((await getPriceRecord('VJ200001'))!.currentPrice, 120);
   await getOrFetchPrice({ rjCode: 'VJ200001' });
   assert.equal(calls.filter((url) => url.includes('VJ200001')).length, 1);
+});
+
+test('failed initial page lookup retries immediately without tracking and still coalesces', async () => {
+  const input = { rjCode: 'BJ03054126' };
+  mode = 'offline';
+  assert.equal((await getOrFetchPrice(input))!.lastAttemptResult, 'failed');
+  assert.equal(await getTracking(input.rjCode), undefined);
+  const before = calls.length;
+  mode = 'mixed';
+  const [first, second] = await Promise.all([getOrFetchPrice(input), getOrFetchPrice(input)]);
+  assert.equal(calls.length, before + 1);
+  assert.equal(first!.lowestPrice, 100);
+  assert.equal(second!.lowestPrice, 100);
+  assert.equal(await getTracking(input.rjCode), undefined);
+  await getOrFetchPrice(input);
+  assert.equal(calls.length, before + 1);
+});
+
+test('missing tracked prices may retry failures; saved history remains manually updated', async () => {
+  const { targets: [target] } = await appendTrackedProducts([{ rjCode: 'BJ200009' }]);
+  mode = 'offline';
+  await updatePrice(target.rjCode, target.trackingToken);
+  mode = 'mixed';
+  const before = calls.length;
+  assert.equal((await getOrFetchPrice({ rjCode: target.rjCode }))!.lowestPrice, 100);
+  assert.equal(calls.length, before + 1);
+  assert.equal((await getTracking(target.rjCode))!.trackingToken, target.trackingToken);
+  mode = 'offline';
+  await updatePrice(target.rjCode, target.trackingToken);
+  mode = 'mixed';
+  const afterFailedUpdate = calls.length;
+  assert.equal((await getOrFetchPrice({ rjCode: target.rjCode }))!.lowestPrice, 100);
+  assert.equal(calls.length, afterFailedUpdate);
 });
 test('single and selected updates keep scope, and failures can be requested again', async () => {
   const before = calls.length;

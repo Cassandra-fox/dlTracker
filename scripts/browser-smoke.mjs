@@ -17,6 +17,7 @@ const child = spawn(executable, [
 ], { windowsHide: true, stdio: ['ignore', 'ignore', 'ignore', 'pipe', 'pipe'] });
 const pending = new Map();
 let sequence = 0, buffer = '';
+let onEvent = () => {};
 function command(method, params = {}, sessionId) {
   return new Promise((resolve, reject) => {
     const id = ++sequence;
@@ -35,6 +36,7 @@ child.stdio[4].on('data', (data) => {
     buffer = buffer.slice(end + 1);
     if (!text) continue;
     const message = JSON.parse(text);
+    if (message.method) { onEvent(message); continue; }
     const item = pending.get(message.id);
     if (!item) continue;
     pending.delete(message.id);
@@ -123,7 +125,49 @@ try {
   const csv = await request({ type: 'EXPORT_CSV' });
   assert.ok(csv.data.csv.includes('VJ900002'));
   assert.ok(!csv.data.csv.includes('RJ900001'));
-  console.log('PASS: production load, real IndexedDB, notes, partial commit, worker interruption, delete, stats and CSV.');
+
+  // Serve a local fixture at the reported URL. The real content bundle runs in
+  // its isolated world, while both page HTML and DLwatcher responses are mocked.
+  const retryWorker = await until(async () => (await command('Target.getTargets')).targetInfos.find((target) => target.type === 'service_worker' && target.url.startsWith(origin)));
+  const retryWorkerSession = (await command('Target.attachToTarget', { targetId: retryWorker.targetId, flatten: true })).sessionId;
+  await evaluate(retryWorkerSession, `globalThis.smokeRequests = []; globalThis.smokeFailure = true;
+    globalThis.fetch = async (url, options) => {
+      globalThis.smokeRequests.push({url: String(url), cache: options.cache});
+      return globalThis.smokeFailure ? new Response('<html>Not found</html>', {status: 404})
+        : Response.json({lowestPrice: {priceInfo: {price: 70}}});
+    }`);
+  const productPage = await command('Target.createTarget', { url: 'about:blank' });
+  const productSession = (await command('Target.attachToTarget', { targetId: productPage.targetId, flatten: true })).sessionId;
+  const fixture = '<!doctype html><html><head><title>Price retry test</title></head><body><h1>Test product</h1><div id="work_price"><div class="work_buy_container">200円</div></div></body></html>';
+  let fixtureError;
+  onEvent = (event) => {
+    if (event.sessionId === productSession && event.method === 'Fetch.requestPaused') {
+      void command('Fetch.fulfillRequest', { requestId: event.params.requestId, responseCode: 200,
+        responseHeaders: [{ name: 'Content-Type', value: 'text/html; charset=utf-8' }],
+        body: Buffer.from(fixture).toString('base64'),
+      }, productSession).catch((error) => { fixtureError = error; });
+    }
+  };
+  await command('Fetch.enable', { patterns: [{ urlPattern: 'https://www.dlsite.com/*' }] }, productSession);
+  await command('Page.navigate', { url: 'https://www.dlsite.com/books/work/=/product_id/BJ03054126.html' }, productSession);
+  const textExpression = "document.querySelector('.dltracker-lowest-price-card')?.textContent ?? ''";
+  await until(async () => (await evaluate(productSession, textExpression)).includes('HTTP 404'));
+  await new Promise((resolve) => setTimeout(resolve, 700));
+  assert.equal(await evaluate(retryWorkerSession, 'globalThis.smokeRequests.length'), 1);
+  await command('Page.reload', {}, productSession);
+  await until(async () => await evaluate(retryWorkerSession, 'globalThis.smokeRequests.length') === 2);
+  await until(async () => (await evaluate(productSession, textExpression)).includes('刷新页面重试'));
+  await evaluate(retryWorkerSession, 'globalThis.smokeFailure = false');
+  await command('Page.reload', {}, productSession);
+  await until(async () => (await evaluate(productSession, textExpression)).includes('70円'));
+  assert.equal(await evaluate(retryWorkerSession, 'globalThis.smokeRequests.length'), 3);
+  assert.equal(await evaluate(retryWorkerSession, "globalThis.smokeRequests.every(item => item.cache === 'no-store' && item.url.endsWith('/BJ03054126.json'))"), true);
+  assert.equal((await request({ type: 'GET_STATS' })).data.favorites, 1);
+  await command('Page.reload', {}, productSession);
+  await until(async () => (await evaluate(productSession, textExpression)).includes('70円'));
+  assert.equal(await evaluate(retryWorkerSession, 'globalThis.smokeRequests.length'), 3);
+  if (fixtureError) throw fixtureError;
+  console.log('PASS: production load, real IndexedDB, notes, partial commit, worker interruption, delete, stats, CSV and untracked page refresh after HTTP 404.');
   console.log('Isolated test artifacts:', profile);
 } finally {
   await command('Browser.close').catch(() => {});

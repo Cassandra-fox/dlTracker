@@ -6,6 +6,7 @@ import { parseRequest } from '@/shared/validation';
 const examples = [
   ['home', 'RJ01735938'], ['soft', 'VJ01005286'], ['app', 'RJ01723094'],
   ['ai', 'RJ01708541'], ['garumani', 'BJ01543907'], ['maniax', 'RJ01727837'],
+  ['books', 'BJ03054126'],
 ];
 for (const [category, id] of examples) {
   test(`parse ${category}/${id}`, () => {
