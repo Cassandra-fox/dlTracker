@@ -13,7 +13,7 @@ body {
 }
 
 .container {
-  max-width: 1140px;
+  max-width: 1600px;
   margin: 0 auto;
   padding: 24px 20px;
 }
@@ -25,6 +25,8 @@ header {
   align-items: center;
   gap: 12px;
   margin-bottom: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 h1 {
@@ -37,6 +39,7 @@ h1 {
 .toolbar {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 button {
@@ -146,16 +149,6 @@ tr:hover td {
 }
 
 /* --- Favorite star --- */
-.tag-yes {
-  color: #d4a017;
-  font-size: 15px;
-  text-align: center;
-}
-
-.tag-no {
-  color: #ccc;
-  text-align: center;
-}
 
 /* --- Row update button --- */
 td button {
@@ -163,3 +156,10 @@ td button {
   font-size: 12px;
   border-radius: 6px;
 }
+
+.hint { color: #666; font-size: 13px; line-height: 1.6; }
+.note-preview { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 280px; max-height: 96px; overflow: auto; margin-bottom: 6px; }
+td textarea { display: block; box-sizing: border-box; width: 260px; padding: 8px; border: 1px solid #a3cd8d; border-radius: 5px; font: inherit; resize: vertical; }
+td textarea + span { display: block; color: #666; font-size: 12px; margin: 4px 0; }
+td button + button { margin-left: 4px; }
+input[type="checkbox"] { width: 16px; height: 16px; accent-color: #5e9741; }

@@ -1,99 +1,66 @@
-import {
-  BATCH_INTERVAL_MS,
-  BATCH_SIZE,
-  DLWATCHER_BASE,
-  REQUEST_TIMEOUT_MS,
-  USER_AGENT,
-} from '@/shared/constants';
-import type { DlWatcherPriceResponse, FetchPriceResult } from '@/shared/types';
-import { safeNumber, sleep } from '@/shared/utils';
+import { DLWATCHER_BASE, REQUEST_TIMEOUT_MS } from '@/shared/constants';
+import { normalizeProductId } from '@/shared/product';
+import type { FetchPriceResult } from '@/shared/types';
+import { safeNumber } from '@/shared/utils';
+import { PriceScheduler } from './price-scheduler';
 
-function buildApiUrl(rjCode: string): string {
-  return `${DLWATCHER_BASE}/${rjCode}.json`;
+function object(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-export function buildDlwatcherPageUrl(rjCode: string): string {
-  return `${DLWATCHER_BASE}/${rjCode}/`;
+export function parsePriceResponse(raw: unknown): FetchPriceResult {
+  const json = object(raw);
+  if (!json) return { status: 'failed', error: 'invalid_response:价格响应不是对象' };
+  if (!('lowestPrice' in json)) return { status: 'failed', error: 'invalid_response:缺少价格结构' };
+  if (json.lowestPrice === null) return { status: 'no_data' };
+  const lowest = object(json.lowestPrice);
+  if (!lowest) return { status: 'failed', error: 'invalid_response:价格结构不合法' };
+  if (lowest.priceInfo === null) return { status: 'no_data' };
+  const priceInfo = object(lowest.priceInfo);
+  if (!priceInfo) return { status: 'failed', error: 'invalid_response:缺少 priceInfo' };
+  if (priceInfo.price === null) return { status: 'no_data' };
+  const price = safeNumber(priceInfo.price);
+  if (price === undefined) return { status: 'failed', error: 'invalid_response:价格数值不合法' };
+  const discount = safeNumber(priceInfo.discountRate);
+  return {
+    status: 'success', lowestPrice: price,
+    title: typeof json.productName === 'string' ? json.productName.slice(0, 2000) : undefined,
+    regularPrice: safeNumber(priceInfo.regularPrice),
+    discountRate: discount !== undefined && discount <= 100 ? discount : undefined,
+  };
 }
 
-export async function fetchPriceFromDlwatcher(rjCode: string): Promise<FetchPriceResult> {
+export function retryAfterMilliseconds(value: string | null, now = Date.now()): number {
+  if (value === null) return 30_000;
+  const seconds = /^\d+(?:\.\d+)?$/.test(value.trim()) ? Number(value) : NaN;
+  const delay = Number.isFinite(seconds) ? seconds * 1000 : Date.parse(value) - now;
+  return Number.isFinite(delay) ? Math.max(1000, delay) : 30_000;
+}
+
+// Deliberately private: all production callers must use the shared scheduler.
+async function fetchPrice(code: string): Promise<FetchPriceResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-
   try {
-    const response = await fetch(buildApiUrl(rjCode), {
-      method: 'GET',
-      signal: controller.signal,
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': USER_AGENT,
-      },
-    });
-
-    if (!response.ok) {
-      console.warn(`[DLTracker] fetch ${rjCode} HTTP ${response.status}`);
-      return {
-        rjCode,
-        lowestPrice: null,
-        dlwatcherUrl: buildDlwatcherPageUrl(rjCode),
-      };
+    const response = await fetch(`${DLWATCHER_BASE}/${code}.json`, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    if (!response.ok) return {
+      status: 'failed', error: `http_${response.status}:上游请求失败`,
+      ...(response.status === 429 ? { retryAfterMs: retryAfterMilliseconds(response.headers.get('Retry-After')) } : {}),
+    };
+    let raw: unknown;
+    try { raw = await response.json(); }
+    catch {
+      return { status: 'failed', error: controller.signal.aborted ? 'timeout:请求超时' : 'invalid_response:无法解析 JSON' };
     }
-
-    const raw: unknown = await response.json();
-    // 运行时类型验证：确保 API 响应结构安全
-    const json = (typeof raw === 'object' && raw !== null ? raw : {}) as DlWatcherPriceResponse;
-    const lowestPrice = safeNumber(json.lowestPrice?.priceInfo?.price) ?? null;
-    const productName = typeof json.productName === 'string' ? json.productName : undefined;
-    console.log(`[DLTracker] fetch ${rjCode} → lowestPrice=${lowestPrice}`);
-
-    return {
-      rjCode,
-      title: productName,
-      lowestPrice,
-      regularPrice: safeNumber(json.lowestPrice?.priceInfo?.regularPrice),
-      discountRate: safeNumber(json.lowestPrice?.priceInfo?.discountRate),
-      dlwatcherUrl: buildDlwatcherPageUrl(rjCode),
-    };
-  } catch (err) {
-    console.error(`[DLTracker] fetch ${rjCode} error:`, err);
-    return {
-      rjCode,
-      lowestPrice: null,
-      dlwatcherUrl: buildDlwatcherPageUrl(rjCode),
-    };
-  } finally {
-    clearTimeout(timer);
-  }
+    return parsePriceResponse(raw);
+  } catch {
+    return { status: 'failed', error: controller.signal.aborted ? 'timeout:请求超时' : 'network:网络请求失败' };
+  } finally { clearTimeout(timer); }
 }
 
-export async function batchFetchPrices(
-  rjCodes: string[],
-  options?: {
-    onProgress?: (completed: number, total: number) => void;
-    keepAlive?: () => void;
-  },
-): Promise<Map<string, FetchPriceResult>> {
-  const total = rjCodes.length;
-  const result = new Map<string, FetchPriceResult>();
-  let completed = 0;
-
-  for (let i = 0; i < rjCodes.length; i += BATCH_SIZE) {
-    const batch = rjCodes.slice(i, i + BATCH_SIZE);
-    const prices = await Promise.all(batch.map((code) => fetchPriceFromDlwatcher(code)));
-
-    for (const item of prices) {
-      result.set(item.rjCode, item);
-      completed += 1;
-      options?.onProgress?.(completed, total);
-    }
-
-    // 每批完成后 keepAlive，防止 MV3 service worker 被终止
-    options?.keepAlive?.();
-
-    if (i + BATCH_SIZE < rjCodes.length) {
-      await sleep(BATCH_INTERVAL_MS);
-    }
-  }
-
-  return result;
+const scheduler = new PriceScheduler(fetchPrice);
+export function requestDlwatcherPrice(code: string): Promise<FetchPriceResult> {
+  const normalized = normalizeProductId(code);
+  if (!normalized) return Promise.resolve({ status: 'failed', error: 'invalid_product:无效作品编号' });
+  return scheduler.request(normalized);
 }

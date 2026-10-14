@@ -1,39 +1,24 @@
-import { sendRuntimeMessage } from '@/shared/runtime';
+import { errorMessage, operationSummary, sendRuntimeMessage, waitForOperation } from '@/shared/runtime';
 
-const favoritesEl = document.getElementById('favorites') as HTMLSpanElement;
-const statusEl = document.getElementById('status') as HTMLParagraphElement;
-
+const favoritesEl = document.getElementById('favorites')!;
+const statusEl = document.getElementById('status')!;
+const update = document.getElementById('update-favorites') as HTMLButtonElement;
+function run(action: () => Promise<void>): void { void action().catch((error: unknown) => { statusEl.textContent = errorMessage(error); }); }
 async function loadStats(): Promise<void> {
-  const response = await sendRuntimeMessage<{ total: number; favorites: number; discounted: number }>({
-    type: 'GET_STATS',
-  });
-
-  if (!response.ok || !response.data) {
-    statusEl.textContent = response.error ?? '统计加载失败';
-    return;
-  }
-
-  // 只显示收藏数，缓存条目不显示
-  favoritesEl.textContent = String(response.data.favorites);
+  const stats = await sendRuntimeMessage({ type: 'GET_STATS' });
+  favoritesEl.textContent = String(stats.favorites);
 }
-
-document.getElementById('open-options')?.addEventListener('click', () => {
-  chrome.runtime.openOptionsPage();
+document.getElementById('open-options')?.addEventListener('click', () => run(() => chrome.runtime.openOptionsPage()));
+update.addEventListener('click', () => run(async () => {
+  update.disabled = true;
+  try {
+    statusEl.textContent = '正在更新本地追踪作品...';
+    const { operationId } = await sendRuntimeMessage({ type: 'UPDATE_ALL_FAVORITES' });
+    await waitForOperation(operationId, (operation) => { statusEl.textContent = operationSummary(operation); });
+  } finally { update.disabled = false; await loadStats(); }
+}));
+chrome.runtime.onMessage.addListener((message: unknown) => {
+  if (message && typeof message === 'object' && 'type' in message && message.type === 'DATA_CHANGED') run(loadStats);
 });
-
-document.getElementById('update-favorites')?.addEventListener('click', async () => {
-  statusEl.textContent = '正在更新收藏价格...';
-  const response = await sendRuntimeMessage<{ imported: number }>({
-    type: 'UPDATE_ALL_FAVORITES',
-  });
-
-  if (!response.ok) {
-    statusEl.textContent = response.error ?? '更新失败';
-    return;
-  }
-
-  statusEl.textContent = `更新完成：${response.data?.imported ?? 0} 条`;
-  await loadStats();
-});
-
-void loadStats();
+window.addEventListener('focus', () => run(loadStats));
+run(loadStats);

@@ -7,14 +7,12 @@ export default defineConfig({
   plugins: [
     webExtension({
       manifest: () => manifest,
-      additionalInputs: [
-        'src/assets/icons/icon16.png',
-        'src/assets/icons/icon32.png',
-        'src/assets/icons/icon48.png',
-        'src/assets/icons/icon128.png',
-      ],
+      // The plugin downloads a remote schema without a request timeout.
+      // ManifestV3 typechecking + check-build.mjs keep builds offline and repeatable.
+      skipManifestValidation: true,
     }),
   ],
+  publicDir: 'src/assets',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

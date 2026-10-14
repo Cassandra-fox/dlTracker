@@ -9,28 +9,26 @@
   <body>
     <main class="container">
       <header>
-        <h1>DL Price Tracker 管理页</h1>
+        <h1>本地追踪作品</h1>
         <div class="toolbar">
-          <button id="refresh">刷新</button>
-          <button id="update-all">更新收藏</button>
+          <button id="refresh">刷新列表</button>
+          <button id="update-selected" disabled>更新选中项</button>
+          <button id="update-all">更新全部</button>
+          <button id="retry-failed" disabled>重试失败项</button>
+          <button id="delete-selected" disabled>删除选中项</button>
           <button id="export">导出 CSV</button>
         </div>
       </header>
-
-      <p id="status" class="status"></p>
-
+      <p id="selection-status">已选择 0 项</p>
+      <p id="status" class="status" role="status"></p>
+      <p class="hint">本地追踪独立于 DLsite 收藏。更新价格不会修改备注；删除追踪会清除备注，已有价格可能保留为临时缓存。</p>
       <section class="table-wrap">
         <table>
-          <thead>
-            <tr>
-              <th class="col-code">RJ号</th>
-              <th class="col-title">标题</th>
-              <th class="col-price">史低价</th>
-              <th class="col-fav">收藏</th>
-              <th class="col-date">最后检查</th>
-              <th class="col-action">操作</th>
-            </tr>
-          </thead>
+          <thead><tr>
+            <th><input id="select-all" type="checkbox" aria-label="全选当前列表" /></th>
+            <th>作品编号</th><th>标题</th><th>历史最低价</th><th>获取状态</th>
+            <th>最近成功更新</th><th>备注</th><th>操作</th>
+          </tr></thead>
           <tbody id="table-body"></tbody>
         </table>
       </section>

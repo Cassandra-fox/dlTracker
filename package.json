@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "typecheck": "tsc --noEmit",
-    "lint": "eslint . --ext .ts"
+    "build": "npm run typecheck && vite build && node scripts/check-build.mjs",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "lint": "eslint .",
+    "test": "tsx --test tests/*.test.ts"
   },
   "dependencies": {
     "dayjs": "^1.11.13",
@@ -15,9 +16,14 @@
   },
   "devDependencies": {
     "@types/chrome": "^0.0.319",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^26.6.5",
     "@typescript-eslint/eslint-plugin": "^8.26.0",
     "@typescript-eslint/parser": "^8.26.0",
     "eslint": "^9.22.0",
+    "fake-indexeddb": "^6.2.5",
+    "jsdom": "^29.1.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.8.2",
     "vite": "^6.2.0",
     "vite-plugin-web-extension": "^4.4.4"
