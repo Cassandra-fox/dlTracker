@@ -19,6 +19,55 @@ DL Price Tracker（DLTracker）是一款适用于 Chrome 和 Edge 的浏览器�
 
 批量更新时，单个作品失败不会中止其他作品。你可以在任务结束后重试失败项；如果浏览器关闭或任务意外中断，已经保存的结果仍会保留。
 
+<details open>
+<summary><strong>📸 功能展示 / Screenshots</strong></summary>
+
+<br>
+
+<h3 align="center">📊 本地追踪管理</h3>
+<p align="center">
+  批量更新历史最低价、管理作品备注、查看获取状态及导出 CSV
+</p>
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/98de12e7-680f-412b-919f-d8d47861f139" alt="本地追踪管理页面" width="95%">
+</p>
+
+<br>
+
+<h3 align="center">📥 一键导入收藏夹</h3>
+<p align="center">
+  在 DLsite 收藏夹页面一键导入作品，自动识别新增及已存在的条目
+</p>
+<table>
+  <tr>
+    <th align="center">导入前</th>
+    <th align="center">导入后</th>
+  </tr>
+  <tr>
+    <td><img src="https://github.com/user-attachments/assets/0efdd698-4d9b-4521-b36e-4b9810cbc348" alt="收藏夹导入前" width="100%"></td>
+    <td><img src="https://github.com/user-attachments/assets/fb2c9cac-a413-4c27-bfd9-5fa5a4124d0f" alt="收藏夹导入后" width="100%"></td>
+  </tr>
+</table>
+
+<br>
+
+<h3 align="center">💰 历史最低价查询</h3>
+<p align="center">
+  在作品详情和收藏列表中直接展示历史最低价与折扣信息
+</p>
+<table>
+  <tr>
+    <th align="center">作品详情页</th>
+    <th align="center">收藏列表</th>
+  </tr>
+  <tr>
+    <td align="center"><img src="https://github.com/user-attachments/assets/1944777a-0d21-4b83-b09c-c8440a8bdeeb" alt="作品详情页价格查询" width="220"></td>
+    <td align="center"><img src="https://github.com/user-attachments/assets/0f80fa0e-4458-49d3-ac81-f3effee29871" alt="收藏列表价格展示" width="100%"></td>
+  </tr>
+</table>
+
+</details>
+  
 ## 安装
 
 提供以下两种安装方式，均通过 Chrome / Edge 的开发者模式加载。
